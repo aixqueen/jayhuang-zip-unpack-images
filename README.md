@@ -1,15 +1,12 @@
-# ComfyUI Zip Tools (True Upload Button)
+This is a ComfyUI custom nodes pack that makes working with ZIP files super convenient:
 
-This extension provides a real **Upload .zip** button inside the node UI.
+Upload a ZIP directly inside the node (no need to manually copy files into the input folder).
 
-## Nodes
-1) **Zip Upload (.zip) [Button]**
-   - Has an Upload button (frontend JS).
-   - Uploads to ComfyUI server endpoint `/ziptools/upload`.
-   - Outputs `zip_path` (STRING) relative to `input/`.
+Load/unpack data from ZIP such as images, masks, prompts/text, videos, and audio for batch workflows.
 
-2) **Zip Path → Unpack → Load Images**
-   - Takes `zip_path` and outputs `IMAGE` batch.
+Pack outputs into a single ZIP and provides a Download ZIP button right inside ComfyUI.
+
+Includes an extra node to resize images to the nearest multiple size to avoid model dimension issues.
 
 ## Install (Git)
 ```bash
