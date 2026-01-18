@@ -15,7 +15,7 @@ Two nodes for a clean workflow:
 
 ```bash
 cd /path/to/ComfyUI/custom_nodes
-git clone https://github.com/<YOUR_GITHUB_USERNAME>/comfyui-zip-tools.git
+git clone https://github.com/aixqueen/jayhuang-zip-unpack-images.git
 ```
 
 Restart ComfyUI.
