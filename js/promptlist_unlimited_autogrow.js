@@ -24,8 +24,20 @@ function ensureInputSlot(node, idx) {
   return input;
 }
 
-function setVisible(node, idx, visible) {
-  const input = ensureInputSlot(node, idx);
+function getExistingPromptMaxIndex(node) {
+  let max = 0;
+  for (const inp of node.inputs || []) {
+    if (!inp?.name) continue;
+    const m = /^prompt_(\d+)$/.exec(inp.name);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (Number.isFinite(n)) max = Math.max(max, n);
+  }
+  return max;
+}
+
+function setVisibleIfExists(node, idx, visible) {
+  const input = findInput(node, `prompt_${idx}`);
   if (input) input.hidden = !visible;
 }
 
@@ -36,17 +48,30 @@ function isLinked(node, idx) {
 }
 
 function refreshVisibility(node) {
-  // Find last linked prompt
+  // Only materialize ports on-demand.
+  // Strategy:
+  //  - Determine the last connected prompt slot that already exists.
+  //  - Ensure the next slot exists (keep one empty slot).
+  //  - Show only up to that next slot; hide any existing slots after it.
+
   let lastUsed = 0;
-  for (let i = 1; i <= MAX_PROMPTS; i++) {
+  const existingMax = getExistingPromptMaxIndex(node);
+  for (let i = 1; i <= existingMax; i++) {
     if (isLinked(node, i)) lastUsed = i;
   }
 
-  // Show up to lastUsed + 1 (keep one empty slot), at least 1
   const showUpTo = Math.min(Math.max(lastUsed + 1, 1), MAX_PROMPTS);
 
-  for (let i = 1; i <= MAX_PROMPTS; i++) {
-    setVisible(node, i, i <= showUpTo);
+  // Ensure ports up to showUpTo exist and are visible.
+  for (let i = 1; i <= showUpTo; i++) {
+    const input = ensureInputSlot(node, i);
+    if (input) input.hidden = false;
+  }
+
+  // Hide any already-created ports beyond showUpTo.
+  const newExistingMax = getExistingPromptMaxIndex(node);
+  for (let i = showUpTo + 1; i <= newExistingMax; i++) {
+    setVisibleIfExists(node, i, false);
   }
 
   node.setDirtyCanvas(true, true);
@@ -57,10 +82,9 @@ app.registerExtension({
   nodeCreated(node) {
     if (node.comfyClass !== CLASS_NAME) return;
 
-    // Ensure slots exist, but hide everything except prompt_1.
-    for (let i = 1; i <= MAX_PROMPTS; i++) {
-      setVisible(node, i, i === 1);
-    }
+    // Materialize ONLY prompt_1 on creation.
+    const first = ensureInputSlot(node, 1);
+    if (first) first.hidden = false;
 
     // React to connecting/disconnecting.
     const orig = node.onConnectionsChange;
