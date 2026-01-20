@@ -3,37 +3,54 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Tuple
 
-
 _PROMPT_KEY_RE = re.compile(r"^prompt_(\d+)$")
 
 
 class EasyPromptListUnlimited:
-    """Unlimited prompt list.
-
-    - UI starts with prompt_1.
-    - Frontend JS automatically appends prompt_2, prompt_3, ... when the last field is filled.
-    - Backend collects prompt_N values in numeric order and returns them as a list output.
     """
+    PromptList (Unlimited) with auto-growing INPUT PORTS (prompt_1..prompt_64).
+
+    UI behavior (frontend JS):
+      - Start by showing prompt_1 only.
+      - When the last visible prompt is connected or has text, reveal the next prompt input.
+      - Always keep exactly one empty prompt below the last used prompt (until reaching the max).
+    """
+
+    MAX_PROMPTS = 64
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt_1": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": True,
-                        "placeholder": "Prompt 1",
-                    },
-                ),
-            },
+        # prompt_1 required; prompt_2..prompt_MAX optional (revealed by JS)
+        required = {
+            "prompt_1": (
+                "STRING",
+                {
+                    "default": "",
+                    "multiline": True,
+                    "forceInput": True,
+                    "placeholder": "Prompt 1",
+                },
+            )
         }
+
+        optional: Dict[str, Any] = {}
+        for i in range(2, cls.MAX_PROMPTS + 1):
+            optional[f"prompt_{i}"] = (
+                "STRING",
+                {
+                    "default": "",
+                    "multiline": True,
+                    "forceInput": True,
+                    "placeholder": f"Prompt {i}",
+                },
+            )
+
+        return {"required": required, "optional": optional}
 
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("prompt_list", "prompt_strings")
 
-    # Both outputs are lists of strings
+    # both outputs are lists of strings
     OUTPUT_IS_LIST = (True, True)
 
     FUNCTION = "execute"
@@ -59,7 +76,7 @@ class EasyPromptListUnlimited:
                 idx = int(m.group(1))
             except Exception:
                 continue
-            if idx <= 1:
+            if idx <= 1 or idx > self.MAX_PROMPTS:
                 continue
             add(idx, v)
 

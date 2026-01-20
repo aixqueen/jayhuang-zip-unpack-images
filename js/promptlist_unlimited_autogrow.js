@@ -1,73 +1,74 @@
 import { app } from "/scripts/app.js";
 
-function getPromptWidgets(node) {
-  const ws = (node.widgets || []).filter(w => /^prompt_\d+$/.test(w.name));
-  ws.sort((a, b) => {
-    const ai = parseInt(a.name.split("_")[1] || "0", 10);
-    const bi = parseInt(b.name.split("_")[1] || "0", 10);
-    return ai - bi;
-  });
-  return ws;
+// Auto-growing INPUT PORTS for: easy promptList (Unlimited)
+//
+// Why this is needed:
+//   In ComfyUI, optional inputs declared in Python are not automatically materialized
+//   as LiteGraph input slots. We create the slots in JS and then show/hide them.
+
+const MAX_PROMPTS = 64;
+const CLASS_NAME = "easy promptList (Unlimited)";
+
+function findInput(node, name) {
+  return (node.inputs || []).find((i) => i && i.name === name);
 }
 
-function addPromptWidget(node, idx) {
+function ensureInputSlot(node, idx) {
   const name = `prompt_${idx}`;
-  const w = node.addWidget(
-    "text",
-    name,
-    "",
-    () => {
-      ensureTrailingEmpty(node);
-    },
-    { multiline: true }
-  );
-  // Keep a predictable ordering in the serialized workflow
-  w.serializeValue = () => w.value;
-  return w;
+  let input = findInput(node, name);
+  if (!input) {
+    // Create LiteGraph input slot. Type STRING to match backend.
+    node.addInput(name, "STRING");
+    input = findInput(node, name);
+  }
+  return input;
 }
 
-function ensureTrailingEmpty(node) {
-  const ws = getPromptWidgets(node);
-  if (ws.length === 0) return;
+function setVisible(node, idx, visible) {
+  const input = ensureInputSlot(node, idx);
+  if (input) input.hidden = !visible;
+}
 
-  // If the last widget has content, append a new empty prompt widget.
-  const last = ws[ws.length - 1];
-  const lastVal = (last.value ?? "").toString().trim();
-  if (lastVal !== "") {
-    addPromptWidget(node, ws.length + 1);
+function isLinked(node, idx) {
+  const name = `prompt_${idx}`;
+  const input = findInput(node, name);
+  return Boolean(input && input.link != null);
+}
+
+function refreshVisibility(node) {
+  // Find last linked prompt
+  let lastUsed = 0;
+  for (let i = 1; i <= MAX_PROMPTS; i++) {
+    if (isLinked(node, i)) lastUsed = i;
   }
 
-  // Remove extra trailing empty widgets, keep exactly one empty at the end.
-  const ws2 = getPromptWidgets(node);
-  let i = ws2.length - 1;
-  // Count trailing empties
-  while (i >= 0 && (ws2[i].value ?? "").toString().trim() === "") {
-    i--;
-  }
-  // i is last non-empty index; we want exactly one empty widget after it.
-  const keepCount = Math.max(i + 2, 1);
-  if (ws2.length > keepCount) {
-    const remove = ws2.slice(keepCount);
-    for (const w of remove) {
-      const idx = node.widgets.indexOf(w);
-      if (idx >= 0) node.widgets.splice(idx, 1);
-    }
+  // Show up to lastUsed + 1 (keep one empty slot), at least 1
+  const showUpTo = Math.min(Math.max(lastUsed + 1, 1), MAX_PROMPTS);
+
+  for (let i = 1; i <= MAX_PROMPTS; i++) {
+    setVisible(node, i, i <= showUpTo);
   }
 
-  node.setSize(node.computeSize());
   node.setDirtyCanvas(true, true);
 }
 
 app.registerExtension({
-  name: "jayhuang.promptlist.unlimited.autogrow",
+  name: "jayhuang.promptlist.unlimited.autoports",
   nodeCreated(node) {
-    if (node.comfyClass !== "easy promptList (Unlimited)") return;
+    if (node.comfyClass !== CLASS_NAME) return;
 
-    // Ensure we start with prompt_1 and one empty trailing slot.
-    const ws = getPromptWidgets(node);
-    if (ws.length === 0) {
-      addPromptWidget(node, 1);
+    // Ensure slots exist, but hide everything except prompt_1.
+    for (let i = 1; i <= MAX_PROMPTS; i++) {
+      setVisible(node, i, i === 1);
     }
-    ensureTrailingEmpty(node);
+
+    // React to connecting/disconnecting.
+    const orig = node.onConnectionsChange;
+    node.onConnectionsChange = function (...args) {
+      if (orig) orig.apply(this, args);
+      refreshVisibility(node);
+    };
+
+    refreshVisibility(node);
   },
 });
